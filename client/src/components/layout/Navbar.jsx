@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, LogOut, Sun, Moon } from 'lucide-react';
+import Modal from '../ui/Modal.jsx';
+import Button from '../ui/Button.jsx';
 import { useAuth } from '../../hooks/useAuth.js';
 import { useDispatch, useSelector } from 'react-redux';
 import { toggleSidebar, toggleTheme } from '../../store/slices/uiSlice.js';
@@ -13,7 +15,10 @@ const Navbar = ({ title }) => {
   const navigate = useNavigate();
   const theme = useSelector((s) => s.ui.theme);
 
-  const handleLogout = () => {
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  const confirmLogout = () => {
+    setShowLogoutModal(false);
     logout();
     toast.success('LOGGED OUT SUCCESSFULLY');
     navigate('/login');
@@ -61,6 +66,10 @@ const Navbar = ({ title }) => {
             letterSpacing: '0.06em',
             color: 'var(--color-ink)',
             fontWeight: 700,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            maxWidth: '180px',
           }}
         >
           {title || 'Chess Analytics'}
@@ -88,7 +97,7 @@ const Navbar = ({ title }) => {
         </button>
 
         {user && (
-          <div style={{
+          <div className="hide-on-mobile" style={{
             display: 'flex',
             alignItems: 'center',
             gap: 'var(--space-2)',
@@ -112,14 +121,34 @@ const Navbar = ({ title }) => {
 
         <button
           id="logout-btn"
-          onClick={handleLogout}
+          onClick={() => setShowLogoutModal(true)}
           className="btn btn-secondary btn-sm"
           style={{ display: 'flex', alignItems: 'center', gap: 6 }}
         >
           <LogOut size={14} />
-          LOGOUT
+          <span className="hide-on-mobile">LOGOUT</span>
         </button>
       </div>
+
+      <Modal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        title="CONFIRM LOGOUT"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowLogoutModal(false)} id="cancel-logout-btn">
+              CANCEL
+            </Button>
+            <Button variant="danger" onClick={confirmLogout} id="confirm-logout-btn">
+              LOGOUT
+            </Button>
+          </>
+        }
+      >
+        <p style={{ fontFamily: 'var(--font-ui)', fontSize: 'var(--font-size-sm)', color: 'var(--color-muted)' }}>
+          Are you sure you want to log out of your account?
+        </p>
+      </Modal>
     </header>
   );
 };

@@ -2,20 +2,26 @@ import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Swords, Users, BookOpen, BarChart2,
-  Search, ShieldCheck, User, Settings, X,
+  Search, ShieldCheck, User, Settings, X, Trophy, GitCompare
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth.js';
 import { useDispatch, useSelector } from 'react-redux';
 import { setSidebarOpen } from '../../store/slices/uiSlice.js';
 
-const ICON_MAP = { LayoutDashboard, Swords, Users, BookOpen, BarChart2, Search, ShieldCheck, User, Settings };
+const ICON_MAP = { LayoutDashboard, Swords, Users, BookOpen, BarChart2, Search, ShieldCheck, User, Settings, Trophy, GitCompare };
 
 const NAV = [
   { path: '/dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
+  { path: '/play/ai', label: 'Play AI', icon: 'Swords' },
+  { path: '/play/random', label: 'Play Online', icon: 'Swords' },
+  { path: '/play/room', label: 'Play Friend', icon: 'Users' },
+  { path: '/puzzles', label: 'Puzzles', icon: 'BookOpen' },
   { path: '/matches', label: 'Matches', icon: 'Swords' },
   { path: '/players', label: 'Players', icon: 'Users' },
   { path: '/openings', label: 'Openings', icon: 'BookOpen' },
   { path: '/analytics', label: 'Analytics', icon: 'BarChart2' },
+  { path: '/leaderboards', label: 'Leaderboards', icon: 'Trophy' },
+  { path: '/compare', label: 'Compare', icon: 'GitCompare' },
   { path: '/search', label: 'Search', icon: 'Search' },
 ];
 
@@ -41,7 +47,7 @@ const Sidebar = () => {
           style={{
             display: 'none',
             position: 'fixed', inset: 0, background: 'rgba(13,13,13,0.5)',
-            zIndex: 99,
+            zIndex: 30,
           }}
           className="sidebar-overlay"
           onClick={() => dispatch(setSidebarOpen(false))}
@@ -50,20 +56,7 @@ const Sidebar = () => {
 
       <aside
         id="sidebar"
-        style={{
-          width: 'var(--sidebar-width)',
-          background: 'var(--color-bg-alt)',
-          borderRight: 'var(--border-brutal)',
-          height: '100vh',
-          position: 'fixed',
-          top: 0,
-          left: sidebarOpen ? 0 : 'calc(-1 * var(--sidebar-width))',
-          display: 'flex',
-          flexDirection: 'column',
-          zIndex: 100,
-          transition: 'left 150ms ease',
-          overflowY: 'auto',
-        }}
+        className={`sidebar ${sidebarOpen ? 'open' : ''}`}
       >
         {/* Logo */}
         <div style={{
@@ -73,7 +66,7 @@ const Sidebar = () => {
           alignItems: 'center',
           justifyContent: 'space-between',
         }}>
-          <NavLink to="/dashboard" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <NavLink to="/dashboard" onClick={() => { if (window.innerWidth <= 768) dispatch(setSidebarOpen(false)); }} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 28 }}>♟</span>
             <span style={{
               fontFamily: 'var(--font-display)',
@@ -115,6 +108,9 @@ const Sidebar = () => {
                 key={path}
                 to={path}
                 id={`nav-${label.toLowerCase()}`}
+                onClick={() => {
+                  if (window.innerWidth <= 768) dispatch(setSidebarOpen(false));
+                }}
                 className={({ isActive }) =>
                   `sidebar-nav-link${isActive ? ' sidebar-nav-active' : ''}`
                 }
@@ -163,6 +159,9 @@ const Sidebar = () => {
                     key={path}
                     to={path}
                     id={`nav-admin-${label.toLowerCase().replace(' ', '-')}`}
+                    onClick={() => {
+                      if (window.innerWidth <= 768) dispatch(setSidebarOpen(false));
+                    }}
                     style={({ isActive }) => ({
                       display: 'flex',
                       alignItems: 'center',
@@ -206,6 +205,9 @@ const Sidebar = () => {
               <NavLink
                 key={path}
                 to={path}
+                onClick={() => {
+                  if (window.innerWidth <= 768) dispatch(setSidebarOpen(false));
+                }}
                 style={({ isActive }) => ({
                   display: 'flex',
                   alignItems: 'center',
