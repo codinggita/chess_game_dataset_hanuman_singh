@@ -79,7 +79,7 @@ const RegisterPage = () => {
               background: 'var(--color-green)',
               textAlign: 'center',
             }}>
-              <div style={{ fontSize: 48, marginBottom: 8 }}>♟</div>
+              <div style={{ fontSize: 48, marginBottom: 8, color: 'var(--color-white)' }}>♟</div>
               <h1 style={{
                 fontFamily: 'var(--font-display)',
                 fontSize: 'var(--font-size-xl)',
