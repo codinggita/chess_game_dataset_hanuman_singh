@@ -32,21 +32,13 @@ const DashboardLayout = () => {
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-bg)' }}>
       <Sidebar />
 
-      <div style={{
-        flex: 1,
-        marginLeft: sidebarOpen ? 'var(--sidebar-width)' : 0,
-        transition: 'margin-left 150ms ease',
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '100vh',
-      }}>
+      <div 
+        className="dashboard-main-content"
+        style={{ marginLeft: sidebarOpen ? 'var(--sidebar-width)' : 0 }}
+      >
         <Navbar title={title} />
 
-        <main style={{
-          flex: 1,
-          padding: 'var(--space-5)',
-          overflowY: 'auto',
-        }}>
+        <main className="dashboard-main-area">
           <Outlet />
         </main>
       </div>

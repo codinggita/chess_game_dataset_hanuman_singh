@@ -56,10 +56,6 @@ const Pagination = ({ currentPage, totalPages, onPageChange, totalCount, pageSiz
         NEXT →
       </button>
 
-      <span className="pagination-info" style={{ marginLeft: 'auto' }}>
-        PAGE {currentPage} OF {totalPages}
-        {totalCount !== undefined && ` · ${totalCount.toLocaleString()} TOTAL`}
-      </span>
     </div>
   );
 };
