@@ -20,7 +20,9 @@ const UsersManagement = () => {
     setError(null);
     try {
       const res = await api.get('/admin/users');
-      setUsers(res.data?.data || res.data?.users || res.data || []);
+      const data = res.data;
+      const userList = data?.data?.users || data?.users || [];
+      setUsers(Array.isArray(userList) ? userList : []);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load users');
     } finally {
@@ -80,7 +82,7 @@ const UsersManagement = () => {
                 users.map((u, idx) => (
                   <tr key={u._id || idx}>
                     <td style={{ color: 'var(--color-muted)', fontSize: 10 }}>{idx + 1}</td>
-                    <td style={{ fontWeight: 600, fontFamily: 'var(--font-display)' }}>{u.username}</td>
+                    <td style={{ fontWeight: 600, fontFamily: 'var(--font-display)' }}>{u.name || u.username || 'Unknown'}</td>
                     <td style={{ color: 'var(--color-muted)' }}>{u.email}</td>
                     <td>
                       <Badge variant={u.role === 'admin' ? 'danger' : 'outline'}>{u.role?.toUpperCase() || 'USER'}</Badge>

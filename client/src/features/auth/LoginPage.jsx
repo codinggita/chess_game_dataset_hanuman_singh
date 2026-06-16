@@ -1,11 +1,11 @@
-import React, { useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { Helmet } from 'react-helmet-async';
 import toast from 'react-hot-toast';
 import { useDispatch, useSelector } from 'react-redux';
-import { loginUser, clearError } from '../../store/slices/authSlice.js';
+import { loginUser, googleLoginUser, clearError } from '../../store/slices/authSlice.js';
 import Button from '../../components/ui/Button.jsx';
 
 const validationSchema = Yup.object({
@@ -16,7 +16,18 @@ const validationSchema = Yup.object({
 const LoginPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const googleButtonRef = useRef(null);
   const { loading, error, isAuthenticated } = useSelector((s) => s.auth);
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+  const handleGoogleCredential = useCallback((response) => {
+    if (!response?.credential) {
+      toast.error('GOOGLE LOGIN FAILED');
+      return;
+    }
+
+    dispatch(googleLoginUser(response.credential));
+  }, [dispatch]);
 
   useEffect(() => {
     if (isAuthenticated) navigate('/dashboard');
@@ -28,6 +39,47 @@ const LoginPage = () => {
       dispatch(clearError());
     }
   }, [error, dispatch]);
+
+  useEffect(() => {
+    if (!googleClientId || !googleButtonRef.current) return;
+
+    const renderGoogleButton = () => {
+      if (!window.google?.accounts?.id || !googleButtonRef.current) return;
+
+      googleButtonRef.current.innerHTML = '';
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: handleGoogleCredential,
+      });
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: 'outline',
+        size: 'large',
+        type: 'standard',
+        text: 'signin_with',
+        shape: 'rectangular',
+        logo_alignment: 'left',
+        width: googleButtonRef.current.offsetWidth || 360,
+      });
+    };
+
+    if (window.google?.accounts?.id) {
+      renderGoogleButton();
+      return;
+    }
+
+    const existingScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+    if (existingScript) {
+      existingScript.addEventListener('load', renderGoogleButton, { once: true });
+      return () => existingScript.removeEventListener('load', renderGoogleButton);
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = renderGoogleButton;
+    document.body.appendChild(script);
+  }, [googleClientId, handleGoogleCredential]);
 
   const formik = useFormik({
     initialValues: { email: '', password: '' },
@@ -71,7 +123,7 @@ const LoginPage = () => {
               background: 'var(--color-black)',
               textAlign: 'center',
             }}>
-              <div style={{ fontSize: 56, marginBottom: 8 }}>♟</div>
+              <div style={{ fontSize: 56, marginBottom: 8, color: 'var(--color-bg)' }}>♟</div>
               <h1 style={{
                 fontFamily: 'var(--font-display)',
                 fontSize: 'var(--font-size-2xl)',
@@ -147,6 +199,37 @@ const LoginPage = () => {
                   LOGIN →
                 </Button>
               </form>
+
+              {googleClientId && (
+                <>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-2)',
+                    margin: 'var(--space-4) 0',
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 'var(--font-size-xs)',
+                    color: 'var(--color-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                  }}>
+                    <span style={{ flex: 1, borderTop: 'var(--border-thin)' }} />
+                    <span>or</span>
+                    <span style={{ flex: 1, borderTop: 'var(--border-thin)' }} />
+                  </div>
+
+                  <div
+                    ref={googleButtonRef}
+                    id="google-login-button"
+                    style={{
+                      minHeight: 44,
+                      width: '100%',
+                      display: 'flex',
+                      justifyContent: 'center',
+                    }}
+                  />
+                </>
+              )}
 
               <p style={{
                 marginTop: 'var(--space-4)',

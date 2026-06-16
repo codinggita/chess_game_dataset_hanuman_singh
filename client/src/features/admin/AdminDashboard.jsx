@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router-dom';
-import { Trophy, Users, BookOpen, Database, Activity } from 'lucide-react';
+import { Trophy, Users, BookOpen, Database } from 'lucide-react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, Legend,
@@ -13,10 +13,6 @@ import { SkeletonCard } from '../../components/ui/Skeleton.jsx';
 import { EmptyState, ErrorState } from '../../components/ui/EmptyState.jsx';
 import Badge from '../../components/ui/Badge.jsx';
 import { formatDate, formatNumber, getResultBadgeClass } from '../../utils/formatters.js';
-import api from '../../services/api.js';
-
-import { BASE_URL } from '../../services/api.js';
-
 const COLORS = ['#F5F2EB', '#1A6B3A', '#D4A017'];
 
 const AdminDashboard = () => {
@@ -24,7 +20,7 @@ const AdminDashboard = () => {
   const [victories, setVictories] = useState(null);
   const [openings, setOpenings] = useState([]);
   const [recentMatches, setRecentMatches] = useState([]);
-  const [health, setHealth] = useState('checking');
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -84,21 +80,9 @@ const AdminDashboard = () => {
     }
   }, []);
 
-  const checkHealth = useCallback(async () => {
-    try {
-      await api.get('/health');
-      setHealth('online');
-    } catch {
-      setHealth('offline');
-    }
-  }, []);
-
   useEffect(() => {
     fetchAll();
-    checkHealth();
-    const healthInterval = setInterval(checkHealth, 30000);
-    return () => clearInterval(healthInterval);
-  }, [fetchAll, checkHealth]);
+  }, [fetchAll]);
 
   const victoryChartData = victories ? [
     { name: 'WHITE WINS', value: victories.whiteWins || victories.white_wins || 0 },
@@ -121,12 +105,7 @@ const AdminDashboard = () => {
       {/* Page Header */}
       <div className="page-header">
         <h1>Dashboard</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="health-dot" style={{ width: 10, height: 10, borderRadius: '50%', display: 'inline-block', background: health === 'online' ? 'var(--color-green-light)' : health === 'offline' ? 'var(--color-danger)' : 'var(--color-warning)' }} />
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--color-muted)' }}>
-            BACKEND: {health.toUpperCase()}
-          </span>
-        </div>
+
       </div>
 
       {error && <ErrorState title="DASHBOARD ERROR" message={error} onRetry={fetchAll} />}
@@ -247,10 +226,10 @@ const AdminDashboard = () => {
                 <th>White Player</th>
                 <th>Black Player</th>
                 <th>Winner</th>
-                <th>Turns</th>
-                <th>Opening</th>
-                <th>Type</th>
-                <th>Date</th>
+                <th className="hide-on-mobile">Turns</th>
+                <th className="hide-on-mobile">Opening</th>
+                <th className="hide-on-mobile">Type</th>
+                <th className="hide-on-mobile">Date</th>
               </tr>
             </thead>
             <tbody>
@@ -277,14 +256,14 @@ const AdminDashboard = () => {
                         {m.winner?.toUpperCase() || '—'}
                       </Badge>
                     </td>
-                    <td>{m.turns || '—'}</td>
-                    <td style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <td className="hide-on-mobile">{m.turns || '—'}</td>
+                    <td className="hide-on-mobile" style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {m.opening_name || m.opening || '—'}
                     </td>
-                    <td>
+                    <td className="hide-on-mobile">
                       <Badge variant="outline">{(m.increment_code || m.time_increment || m.timeControl || m.type || '—').toUpperCase()}</Badge>
                     </td>
-                    <td style={{ color: 'var(--color-muted)', fontSize: 'var(--font-size-xs)' }}>
+                    <td className="hide-on-mobile" style={{ color: 'var(--color-muted)', fontSize: 'var(--font-size-xs)' }}>
                       {formatDate(m.createdAt || m.created_at)}
                     </td>
                   </tr>
@@ -295,30 +274,7 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      {/* System Status */}
-      <div className="brutal-card" style={{ maxWidth: 400 }}>
-        <div style={{ paddingLeft: 'var(--space-3)' }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--color-muted)', marginBottom: 8 }}>
-            System Status
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Activity size={20} color={health === 'online' ? 'var(--color-green-light)' : 'var(--color-danger)'} />
-            <div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--font-size-sm)', fontWeight: 700 }}>
-                Backend API
-              </div>
-              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 'var(--font-size-xs)', color: 'var(--color-muted)' }}>
-                {BASE_URL.replace('https://', '').replace('http://', '').split('/')[0]}
-              </div>
-            </div>
-            <div style={{ marginLeft: 'auto' }}>
-              <Badge variant={health === 'online' ? 'green' : 'danger'}>
-                {health.toUpperCase()}
-              </Badge>
-            </div>
-          </div>
-        </div>
-      </div>
+
     </>
   );
 };
