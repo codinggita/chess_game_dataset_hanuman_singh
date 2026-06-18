@@ -1,7 +1,7 @@
 import React from 'react';
 
-const Card = ({ children, className = '', style = {} }) => (
-  <div className={`brutal-card ${className}`} style={style}>
+const Card = ({ children, className = '', style = {}, onClick }) => (
+  <div className={`brutal-card ${className}`} style={style} onClick={onClick}>
     {children}
   </div>
 );

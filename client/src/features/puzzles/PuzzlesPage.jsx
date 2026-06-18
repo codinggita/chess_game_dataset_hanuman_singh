@@ -1,54 +1,82 @@
-import React, { useState, useEffect } from 'react';
-import { Chessboard } from 'react-chessboard';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Chess } from 'chess.js';
+import ChessGameBoard from '../../components/chess/ChessGameBoard';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 
-// Dummy Puzzle Database
 const DUMMY_PUZZLES = [
   {
     id: 1,
     fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4',
     solution: ['h5f7'],
     rating: 800,
-    theme: 'Mate in 1'
+    theme: 'Mate in 1',
   },
   {
     id: 2,
     fen: '8/8/8/8/4k3/4p3/4Q3/4K3 w - - 0 1',
     solution: ['e2c4', 'e4f3', 'c4e2'],
     rating: 1200,
-    theme: 'Perpetual Check'
-  }
+    theme: 'Perpetual Check',
+  },
+  {
+    id: 3,
+    fen: 'r1bqkbnr/pppppppp/2n5/4P3/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2',
+    solution: ['c6e5'],
+    rating: 900,
+    theme: 'Hanging Piece',
+  },
+  {
+    id: 4,
+    fen: '2k5/2p5/1K6/8/8/8/8/4R3 w - - 0 1',
+    solution: ['e1e8'],
+    rating: 1000,
+    theme: 'Back Rank Mate',
+  },
+  {
+    id: 5,
+    fen: 'r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4',
+    solution: ['f3g5'],
+    rating: 1100,
+    theme: 'Fork',
+  },
 ];
 
 export default function PuzzlesPage() {
-  const [currentPuzzleIndex, setCurrentPuzzleIndex] = useState(0);
   const [game, setGame] = useState(new Chess());
+  const [puzzleIndex, setPuzzleIndex] = useState(0);
   const [moveIndex, setMoveIndex] = useState(0);
-  const [status, setStatus] = useState('Solve the puzzle!');
+  const [status, setStatus] = useState('Solve the puzzle! Find the best move.');
   const [streak, setStreak] = useState(0);
+  const [solved, setSolved] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
+  const [gameResult, setGameResult] = useState(null);
 
-  const puzzle = DUMMY_PUZZLES[currentPuzzleIndex];
+  const puzzle = DUMMY_PUZZLES[puzzleIndex];
 
   useEffect(() => {
     loadPuzzle();
-  }, [currentPuzzleIndex]);
+  }, [puzzleIndex]);
 
   const loadPuzzle = () => {
-    setGame(new Chess(puzzle.fen));
+    setGame(new Chess(DUMMY_PUZZLES[puzzleIndex].fen));
     setMoveIndex(0);
     setStatus('Solve the puzzle! Find the best move.');
+    setSolved(false);
+    setFailed(false);
+    setGameOver(false);
+    setGameResult(null);
   };
 
-  const onDrop = (sourceSquare, targetSquare) => {
+  const nextPuzzle = () => {
+    setPuzzleIndex((i) => (i + 1) % DUMMY_PUZZLES.length);
+  };
+
+  const handleMove = useCallback((sourceSquare, targetSquare) => {
     const newGame = new Chess(game.fen());
     try {
-      const move = newGame.move({
-        from: sourceSquare,
-        to: targetSquare,
-        promotion: 'q'
-      });
+      const move = newGame.move({ from: sourceSquare, to: targetSquare, promotion: 'q' });
       if (move === null) return false;
 
       const userMoveStr = move.from + move.to;
@@ -56,23 +84,32 @@ export default function PuzzlesPage() {
 
       if (userMoveStr === expectedMoveStr) {
         setGame(newGame);
-        
-        if (moveIndex + 1 === puzzle.solution.length) {
+
+        if (moveIndex + 1 >= puzzle.solution.length) {
           setStatus('Puzzle Solved! Great job.');
-          setStreak(s => s + 1);
-          setTimeout(nextPuzzle, 1500);
+          setSolved(true);
+          setStreak((s) => s + 1);
+          setGameOver(true);
+          setGameResult({ type: 'checkmate', winner: 'player' });
+          setTimeout(nextPuzzle, 2000);
         } else {
-          setStatus('Correct! But there is more...');
-          setMoveIndex(i => i + 1);
-          
-          // Auto-play opponent's response
+          setStatus('Correct! Waiting for opponent response...');
+          setMoveIndex((i) => i + 1);
+
           setTimeout(() => {
             const oppMoveStr = puzzle.solution[moveIndex + 1];
             if (oppMoveStr) {
               const oppGame = new Chess(newGame.fen());
-              oppGame.move({ from: oppMoveStr.substring(0, 2), to: oppMoveStr.substring(2, 4), promotion: 'q' });
-              setGame(oppGame);
-              setMoveIndex(i => i + 2);
+              const oppResult = oppGame.move({
+                from: oppMoveStr.substring(0, 2),
+                to: oppMoveStr.substring(2, 4),
+                promotion: 'q',
+              });
+              if (oppResult) {
+                setGame(oppGame);
+                setMoveIndex((i) => i + 2);
+                setStatus('Your turn! Find the best move.');
+              }
             }
           }, 500);
         }
@@ -80,55 +117,51 @@ export default function PuzzlesPage() {
       } else {
         setStatus('Incorrect move. Try again!');
         setStreak(0);
+        setFailed(true);
         return false;
       }
     } catch (e) {
       return false;
     }
-  };
+  }, [game, moveIndex, puzzle]);
 
-  const nextPuzzle = () => {
-    setCurrentPuzzleIndex((i) => (i + 1) % DUMMY_PUZZLES.length);
-  };
-
-  return (
-    <div className="p-4 sm:p-8 max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-4xl font-black uppercase tracking-tighter">Puzzles</h1>
-        <div className="text-2xl font-bold bg-black text-white px-4 py-2 border-2 border-black">
-          STREAK: {streak}
-        </div>
+  const settingsContent = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <div>
+        <label className="cgb-label">Rating</label>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--font-size-lg)', fontWeight: 700, color: 'var(--color-ink)' }}>{puzzle.rating}</div>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
-          <Card className="p-4 brutal-shadow bg-gray-50 flex justify-center">
-            <div className="w-full max-w-[50vh] md:max-w-[400px] mx-auto">
-              <Chessboard 
-                position={game.fen()} 
-                onPieceDrop={onDrop}
-                customDarkSquareStyle={{ backgroundColor: '#000000' }}
-                customLightSquareStyle={{ backgroundColor: '#ffffff' }}
-              />
-            </div>
-          </Card>
-        </div>
-
-        <div className="space-y-6">
-          <Card className="p-6 brutal-shadow bg-blue-50">
-            <h2 className="text-xl font-bold mb-2 uppercase">Current Puzzle</h2>
-            <div className="text-sm font-bold text-gray-600 mb-1">RATING: {puzzle.rating}</div>
-            <div className="text-sm font-bold text-gray-600 mb-4">THEME: {puzzle.theme}</div>
-            
-            <p className="text-lg font-bold mb-6">{status}</p>
-
-            <div className="space-y-2">
-              <Button variant="outline" className="w-full" onClick={loadPuzzle}>RETRY PUZZLE</Button>
-              <Button variant="primary" className="w-full" onClick={nextPuzzle}>SKIP PUZZLE</Button>
-            </div>
-          </Card>
-        </div>
+      <div>
+        <label className="cgb-label">Theme</label>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--color-ink)' }}>{puzzle.theme}</div>
+      </div>
+      <div className="cgb-action-btns">
+        <Button onClick={loadPuzzle}>RETRY PUZZLE</Button>
+        <Button variant="outline" onClick={nextPuzzle}>SKIP PUZZLE</Button>
       </div>
     </div>
+  );
+
+  return (
+    <ChessGameBoard
+      title="Puzzles"
+      game={game}
+      onMove={handleMove}
+      status={status}
+      gameStarted={true}
+      gameOver={gameOver}
+      playerColor="w"
+      opponentName="Puzzle"
+      gameResult={gameResult}
+      onNewGame={loadPuzzle}
+      onReview={() => { setGameOver(false); setGameResult(null); }}
+      settingsContent={settingsContent}
+      extraSidebarContent={
+        <Card style={{ padding: 'var(--space-3) var(--space-4)', textAlign: 'center' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--font-size-xs)', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--color-muted)', marginBottom: 'var(--space-1)', fontWeight: 700 }}>Streak</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--font-size-3xl)', fontWeight: 700, color: streak > 0 ? 'var(--color-green)' : 'var(--color-ink)' }}>{streak}</div>
+        </Card>
+      }
+    />
   );
 }
