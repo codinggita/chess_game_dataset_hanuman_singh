@@ -3,7 +3,7 @@
  */
 class EngineService {
   constructor() {
-    this.stockfish = new Worker('/engine/stockfish.js');
+    this.stockfish = new Worker('/stockfish.js');
     this.isReady = false;
     this.callbacks = {};
 
@@ -59,6 +59,7 @@ class EngineService {
   findBestMove(fen, level = 10, depth = 10, timeLimitMs = 1000, callbacks = {}) {
     this.callbacks = callbacks;
     this.setDifficulty(level);
+    this.sendCommand('ucinewgame');
     this.sendCommand(`position fen ${fen}`);
     this.sendCommand(`go depth ${depth} movetime ${timeLimitMs}`);
   }

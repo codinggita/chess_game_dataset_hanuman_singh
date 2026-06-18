@@ -13,9 +13,7 @@ export default function PlayRandomPage() {
 
   useEffect(() => {
     const token = localStorage.getItem('chess_auth_token');
-    const newSocket = io('http://localhost:5000/matchmaking', {
-      auth: { token }
-    });
+    const newSocket = io('http://localhost:5000/matchmaking', { auth: { token } });
 
     newSocket.on('connect', () => console.log('Connected to matchmaking namespace'));
 
@@ -29,23 +27,19 @@ export default function PlayRandomPage() {
       setStatus('Left queue. Select a Time Control.');
     });
 
-    newSocket.on('match_found', ({ roomId, players }) => {
+    newSocket.on('match_found', ({ roomId }) => {
       setStatus('MATCH FOUND! Joining game...');
-      setTimeout(() => {
-        // Redirect to the room and auto-join
-        navigate('/play/room', { state: { autoJoin: roomId } });
-      }, 1500);
+      setTimeout(() => navigate('/play/room', { state: { autoJoin: roomId } }), 1500);
     });
 
     setSocket(newSocket);
-
     return () => newSocket.close();
   }, [navigate]);
 
   const joinQueue = (mode) => {
     if (!socket) return;
     setSelectedMode(mode);
-    socket.emit('join_queue', { mode, rating: 1200 }); // Hardcoded rating for now
+    socket.emit('join_queue', { mode, rating: 1200 });
   };
 
   const leaveQueue = () => {
@@ -54,31 +48,46 @@ export default function PlayRandomPage() {
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto space-y-8 text-center">
-      <h1 className="text-5xl font-black uppercase">Play Online</h1>
-      <p className="text-xl font-bold">{status}</p>
+    <div style={{ padding: 'var(--space-4)', maxWidth: 900, margin: '0 auto' }}>
+      <style>{`
+        .pr-title { font-family: var(--font-display); font-size: var(--font-size-2xl); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-ink); margin-bottom: var(--space-4); padding-bottom: var(--space-4); border-bottom: var(--border-brutal); }
+        .pr-status { font-family: var(--font-display); font-size: var(--font-size-lg); font-weight: 700; text-transform: uppercase; color: var(--color-ink); margin-bottom: var(--space-6); }
+        .pr-mode-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-4); }
+        @media (min-width: 640px) { .pr-mode-grid { grid-template-columns: repeat(3, 1fr); } }
+        .pr-mode-card { padding: var(--space-6); display: flex; flex-direction: column; align-items: center; gap: var(--space-3); cursor: pointer; transition: transform 150ms ease; }
+        .pr-mode-card:hover { transform: translate(-4px, -4px); }
+        .pr-mode-name { font-family: var(--font-display); font-size: var(--font-size-2xl); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-ink); }
+        .pr-mode-time { font-family: var(--font-ui); font-size: var(--font-size-md); font-weight: 700; color: var(--color-muted); }
+        .pr-searching-wrap { display: flex; flex-direction: column; align-items: center; gap: var(--space-5); padding: var(--space-8) 0; }
+        .pr-searching-spinner { width: 120px; height: 120px; border: var(--border-brutal); background: var(--color-black); display: flex; align-items: center; justify-content: center; animation: pr-pulse 1.5s ease-in-out infinite; }
+        @keyframes pr-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        .pr-searching-text { font-family: var(--font-display); font-size: var(--font-size-sm); font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--color-bg); }
+      `}</style>
+
+      <h1 className="pr-title">Play Online</h1>
+      <p className="pr-status">{status}</p>
 
       {!inQueue ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-          <Card className="p-8 brutal-shadow flex flex-col gap-4 items-center hover:-translate-y-1 transition-transform cursor-pointer" onClick={() => joinQueue('bullet')}>
-            <h2 className="text-3xl font-black uppercase">Bullet</h2>
-            <p className="font-bold text-gray-600">1 min</p>
+        <div className="pr-mode-grid">
+          <Card className="pr-mode-card" onClick={() => joinQueue('bullet')}>
+            <div className="pr-mode-name">Bullet</div>
+            <div className="pr-mode-time">1 min</div>
           </Card>
-          <Card className="p-8 brutal-shadow flex flex-col gap-4 items-center hover:-translate-y-1 transition-transform cursor-pointer" onClick={() => joinQueue('blitz')}>
-            <h2 className="text-3xl font-black uppercase">Blitz</h2>
-            <p className="font-bold text-gray-600">3 min</p>
+          <Card className="pr-mode-card" onClick={() => joinQueue('blitz')}>
+            <div className="pr-mode-name">Blitz</div>
+            <div className="pr-mode-time">3 min</div>
           </Card>
-          <Card className="p-8 brutal-shadow flex flex-col gap-4 items-center hover:-translate-y-1 transition-transform cursor-pointer" onClick={() => joinQueue('rapid')}>
-            <h2 className="text-3xl font-black uppercase">Rapid</h2>
-            <p className="font-bold text-gray-600">10 min</p>
+          <Card className="pr-mode-card" onClick={() => joinQueue('rapid')}>
+            <div className="pr-mode-name">Rapid</div>
+            <div className="pr-mode-time">10 min</div>
           </Card>
         </div>
       ) : (
-        <div className="mt-12 flex flex-col items-center gap-6">
-          <div className="animate-pulse w-32 h-32 bg-black rounded-full flex items-center justify-center">
-             <span className="text-white font-bold uppercase">Searching</span>
+        <div className="pr-searching-wrap">
+          <div className="pr-searching-spinner">
+            <span className="pr-searching-text">Searching</span>
           </div>
-          <Button variant="outline" className="text-xl px-12 py-4" onClick={leaveQueue}>CANCEL MATCHMAKING</Button>
+          <Button variant="outline" onClick={leaveQueue} style={{ minWidth: 200, justifyContent: 'center' }}>CANCEL MATCHMAKING</Button>
         </div>
       )}
     </div>
