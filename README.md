@@ -34,39 +34,105 @@ Whether you are a casual player looking to analyze your worst blunders, or a dat
 
 1. [Introduction](#-introduction)
 2. [Quick Links](#-quick-links)
-3. [System Architecture](#-system-architecture)
-4. [Comprehensive Feature List](#-comprehensive-feature-list)
+3. [Tech Stack](#-tech-stack)
+4. [Folder Structure](#-folder-structure)
+5. [System Architecture](#-system-architecture)
+6. [Comprehensive Feature List](#-comprehensive-feature-list)
    - [Frontend Features](#frontend-features)
    - [Backend Features](#backend-features)
-5. [Frontend Deep Dive](#-frontend-deep-dive)
+7. [Frontend Deep Dive](#-frontend-deep-dive)
    - [Brutalist Design System](#brutalist-design-system)
    - [Redux State Caching](#redux-state-caching)
    - [Component Hierarchy](#component-hierarchy)
    - [Data Visualization](#data-visualization)
-6. [Backend Deep Dive](#-backend-deep-dive)
+8. [Backend Deep Dive](#-backend-deep-dive)
    - [MVC Architecture](#mvc-architecture)
    - [Authentication & JWT Flow](#authentication--jwt-flow)
    - [MongoDB Aggregation Pipelines](#mongodb-aggregation-pipelines)
-7. [Database Schema Design](#-database-schema-design)
+9. [Database Schema Design](#-database-schema-design)
    - [User Schema](#user-schema)
    - [Match Schema](#match-schema)
    - [Player Schema](#player-schema)
-8. [Extensive API Documentation](#-extensive-api-documentation)
+10. [Extensive API Documentation](#-extensive-api-documentation)
    - [Auth Routes](#auth-routes)
    - [Match Routes](#match-routes)
    - [Player Routes](#player-routes)
    - [Analytics Routes](#analytics-routes)
-9. [Installation & Setup Guide](#-installation--setup-guide)
+11. [Installation & Setup Guide](#-installation--setup-guide)
    - [Prerequisites](#prerequisites)
    - [Environment Variables](#environment-variables)
    - [Backend Setup](#backend-setup)
    - [Frontend Setup](#frontend-setup)
-10. [Deployment Guide](#-deployment-guide)
-11. [Security Best Practices](#-security-best-practices)
-12. [Project Roadmap & Future Enhancements](#-project-roadmap--future-enhancements)
-13. [Contributing](#-contributing)
-14. [License](#-license)
-15. [Author](#-author)
+12. [Deployment Guide](#-deployment-guide)
+13. [Security Best Practices](#-security-best-practices)
+14. [Project Roadmap & Future Enhancements](#-project-roadmap--future-enhancements)
+15. [Contributing](#-contributing)
+16. [FAQ](#-faq)
+17. [License](#-license)
+18. [Author](#-author)
+
+---
+
+## 💻 Tech Stack
+
+### Frontend
+- **React**: UI Library (Single Page Application)
+- **Vite**: Next-Generation Frontend Tooling
+- **Redux Toolkit**: Predictable State Container
+- **Custom CSS**: Brutalist Design System
+- **Recharts**: Composable Charting Library
+
+### Backend
+- **Node.js**: JavaScript Runtime
+- **Express.js**: Fast, unopinionated web framework
+- **MongoDB & Mongoose**: NoSQL Database and Object Data Modeling
+- **JSON Web Tokens (JWT)**: Secure Authentication
+- **Bcrypt**: Password Hashing
+
+---
+
+## 📁 Folder Structure
+
+### Client (`/client`)
+The frontend application structure:
+```text
+client/
+├── src/
+│   ├── assets/           # Static images and SVGs
+│   ├── components/
+│   │   ├── layout/       # Structural components (Navbar, Sidebar)
+│   │   └── ui/           # Reusable brutalist components (Buttons, Inputs, Modals)
+│   ├── features/
+│   │   ├── analytics/    # High-level dashboard charts
+│   │   ├── auth/         # Login, Register, Auth tracking
+│   │   ├── matches/      # Match listing, detail views, PGN parsers
+│   │   └── players/      # Player profiles, ranking leaderboards
+│   ├── hooks/            # Custom React hooks (useAuth, useDebounce, usePagination)
+│   ├── store/            # Redux Toolkit setup and slices
+│   ├── styles/           # Global CSS, variables, brutalist utilities
+│   └── utils/            # Formatting helpers (date, Elo, status strings)
+```
+
+### Server (`/server`)
+The backend application structure:
+```text
+server/
+├── src/
+│   ├── config/           # MongoDB connection, env variable validation
+│   ├── controllers/      # Express request handlers
+│   │   ├── admin.controller.js
+│   │   ├── auth.controller.js
+│   │   ├── match.controller.js
+│   │   └── player.controller.js
+│   ├── middlewares/      # Custom Express middlewares
+│   │   ├── auth.middleware.js
+│   │   ├── error.middleware.js
+│   │   └── rateLimiter.middleware.js
+│   ├── models/           # Mongoose schemas
+│   ├── routes/           # API route definitions
+│   ├── services/         # Business logic and complex aggregations
+│   └── utils/            # Shared helpers
+```
 
 ---
 
@@ -577,42 +643,7 @@ Distributed under the MIT License. See `LICENSE` for more information. This proj
 ---
 *If you find this project useful, please consider giving it a ⭐ on GitHub!*
 
----
 
-## 🗂️ Complete Directory Index
-
-### `/client`
-The frontend application structure:
-- `src/assets/`: Static images and SVGs.
-- `src/components/ui/`: Reusable brutalist components (Buttons, Inputs, Modals).
-- `src/components/layout/`: Structural components (Navbar, Sidebar).
-- `src/features/auth/`: Login, Register, Auth tracking.
-- `src/features/matches/`: Match listing, detail views, PGN parsers.
-- `src/features/players/`: Player profiles, ranking leaderboards.
-- `src/features/analytics/`: High-level dashboard charts.
-- `src/hooks/`: Custom React hooks (`useAuth`, `useDebounce`, `usePagination`).
-- `src/store/`: Redux Toolkit setup and slices.
-- `src/styles/`: Global CSS, variables, brutalist utilities.
-- `src/utils/`: Formatting helpers (date, Elo, status strings).
-
-### `/server`
-The backend application structure:
-- `src/config/`: MongoDB connection, environment variable validation.
-- `src/controllers/`: Express request handlers.
-  - `auth.controller.js`: Handles login/registration.
-  - `match.controller.js`: CRUD for matches.
-  - `player.controller.js`: Profile and stats fetching.
-  - `admin.controller.js`: System metrics.
-- `src/models/`: Mongoose schemas.
-- `src/routes/`: API route definitions.
-- `src/services/`: Business logic and complex aggregations.
-- `src/middlewares/`: Custom Express middlewares.
-  - `auth.middleware.js`: JWT verification.
-  - `error.middleware.js`: Global error formatting.
-  - `rateLimiter.middleware.js`: Express-rate-limit instances.
-- `src/utils/`: Shared helpers.
-
----
 
 ## 🔄 Redux Toolkit Structure Deep Dive
 
