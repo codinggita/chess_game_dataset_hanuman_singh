@@ -39,7 +39,8 @@ const AnalyticsDashboard = () => {
     setLoading(true);
     setError(null);
     try {
-      const [vicRes, colorRes, openRes, timeRes, distRes, trendRes] = await Promise.all([
+      // Each endpoint is independent — one failing shouldn't blank the whole page.
+      const results = await Promise.allSettled([
         analyticsService.getVictories(),        // /analytics/victory-distribution (for draws)
         analyticsService.getColorAdvantage(),   // /analytics/color-advantage (for white/black wins)
         analyticsService.getOpenings(),         // /analytics/opening-success
@@ -47,14 +48,20 @@ const AnalyticsDashboard = () => {
         analyticsService.getRatingDistribution(),
         analyticsService.getRatingTrend(),
       ]);
-      
+      const [vicRes, colorRes, openRes, timeRes, distRes, trendRes] =
+        results.map((r) => (r.status === 'fulfilled' ? r.value : null));
+
+      if (results.every((r) => r.status === 'rejected')) {
+        throw new Error('Unable to load analytics data. Please try again.');
+      }
+
       // Server wraps: { success, message, data: { data: [ ... ] } }
       // Get draws from victory distribution
-      const vicArray = vicRes.data?.data?.data ?? vicRes.data?.data ?? vicRes.data ?? [];
+      const vicArray = vicRes?.data?.data?.data ?? vicRes?.data?.data ?? vicRes?.data ?? [];
       const draw = Array.isArray(vicArray) ? (vicArray.find(v => v.status === 'draw' || v._id === 'draw')?.count || 0) : 0;
 
       // Get white/black wins from color advantage
-      const colorArray = colorRes.data?.data?.data ?? colorRes.data?.data ?? colorRes.data ?? [];
+      const colorArray = colorRes?.data?.data?.data ?? colorRes?.data?.data ?? colorRes?.data ?? [];
       let white = 0, black = 0;
       if (Array.isArray(colorArray)) {
         white = colorArray.find(c => c.color === 'white' || c._id === 'white')?.count || 0;
@@ -68,20 +75,20 @@ const AnalyticsDashboard = () => {
           drawPct: total ? (draw / total) * 100 : 0,
         });
 
-      const openRaw = openRes.data?.data?.data ?? openRes.data?.data ?? openRes.data ?? [];
+      const openRaw = openRes?.data?.data?.data ?? openRes?.data?.data ?? openRes?.data ?? [];
       const openList = Array.isArray(openRaw) ? openRaw : [];
       setOpenings(openList.slice(0, 10));
 
-      const timeRaw = timeRes.data?.data?.data ?? timeRes.data?.data ?? timeRes.data ?? [];
+      const timeRaw = timeRes?.data?.data?.data ?? timeRes?.data?.data ?? timeRes?.data ?? [];
       setTimeControl(Array.isArray(timeRaw) ? timeRaw.map(t => ({
         name: (t.timeClass || t.type || 'UNKNOWN').toUpperCase(),
         value: t.count || 0
       })) : []);
 
-      const distRaw = distRes.data?.data?.data ?? distRes.data?.data ?? distRes.data ?? [];
+      const distRaw = distRes?.data?.data?.data ?? distRes?.data?.data ?? distRes?.data ?? [];
       setRatingDist(Array.isArray(distRaw) ? distRaw : []);
 
-      const trendRaw = trendRes.data?.data?.data ?? trendRes.data?.data ?? trendRes.data ?? [];
+      const trendRaw = trendRes?.data?.data?.data ?? trendRes?.data?.data ?? trendRes?.data ?? [];
       setRatingTrend(Array.isArray(trendRaw) ? trendRaw : []);
     } catch (err) {
       setError(err.message);

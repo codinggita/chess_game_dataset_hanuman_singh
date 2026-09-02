@@ -86,39 +86,31 @@ const PlayerComparison = () => {
       const p1 = comp.player1;
       const p2 = comp.player2;
 
-      // Transform into Radar Chart format
-      const radarData = [
-        {
-          metric: 'Current Rating',
-          [p1.username]: p1.currentRating || p1.current_rating || 0,
-          [p2.username]: p2.currentRating || p2.current_rating || 0,
-          fullMark: Math.max(p1.currentRating || 0, p2.currentRating || 0) + 200,
-        },
-        {
-          metric: 'Total Matches',
-          [p1.username]: p1.totalGames || 0,
-          [p2.username]: p2.totalGames || 0,
-          fullMark: Math.max(p1.totalGames || 0, p2.totalGames || 0) + 10,
-        },
-        {
-          metric: 'Win Rate %',
-          [p1.username]: p1.totalGames ? parseFloat(((p1.wins / p1.totalGames) * 100).toFixed(1)) : 0,
-          [p2.username]: p2.totalGames ? parseFloat(((p2.wins / p2.totalGames) * 100).toFixed(1)) : 0,
-          fullMark: 100,
-        },
-        {
-          metric: 'Loss Rate %',
-          [p1.username]: p1.totalGames ? parseFloat(((p1.losses / p1.totalGames) * 100).toFixed(1)) : 0,
-          [p2.username]: p2.totalGames ? parseFloat(((p2.losses / p2.totalGames) * 100).toFixed(1)) : 0,
-          fullMark: 100,
-        },
-        {
-          metric: 'Draw Rate %',
-          [p1.username]: p1.totalGames ? parseFloat(((p1.draws / p1.totalGames) * 100).toFixed(1)) : 0,
-          [p2.username]: p2.totalGames ? parseFloat(((p2.draws / p2.totalGames) * 100).toFixed(1)) : 0,
-          fullMark: 100,
-        }
+      const rating1 = p1.currentRating || p1.current_rating || 0;
+      const rating2 = p2.currentRating || p2.current_rating || 0;
+      const rate = (part, total) => (total ? parseFloat(((part / total) * 100).toFixed(1)) : 0);
+
+      // Every radar spoke shares one radial scale, so raw values (rating ~1500 vs
+      // matches ~50 vs percentages 0-100) can't coexist. Normalise each metric to
+      // 0-100 relative to the two players, and keep the real numbers for the tooltip.
+      const rows = [
+        { metric: 'Rating', a: rating1, b: rating2 },
+        { metric: 'Matches', a: p1.totalGames || 0, b: p2.totalGames || 0 },
+        { metric: 'Win %', a: rate(p1.wins, p1.totalGames), b: rate(p2.wins, p2.totalGames), pct: true },
+        { metric: 'Loss %', a: rate(p1.losses, p1.totalGames), b: rate(p2.losses, p2.totalGames), pct: true },
+        { metric: 'Draw %', a: rate(p1.draws, p1.totalGames), b: rate(p2.draws, p2.totalGames), pct: true },
       ];
+
+      const radarData = rows.map(({ metric, a, b, pct }) => {
+        const scale = pct ? 100 : Math.max(a, b, 1);
+        return {
+          metric,
+          playerA: Math.round((a / scale) * 100),
+          playerB: Math.round((b / scale) * 100),
+          rawA: pct ? `${a}%` : a,
+          rawB: pct ? `${b}%` : b,
+        };
+      });
 
       setData({ radarData, p1, p2 });
     } catch (err) {
@@ -210,11 +202,17 @@ const PlayerComparison = () => {
                 <RadarChart cx="50%" cy="50%" outerRadius="70%" data={data.radarData}>
                   <PolarGrid stroke="var(--color-muted)" />
                   <PolarAngleAxis dataKey="metric" tick={{ fill: 'var(--color-ink)', fontFamily: 'var(--font-ui)', fontSize: 12 }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 'dataMax']} tick={false} axisLine={false} />
-                  <Radar name={data.p1.username} dataKey={data.p1.username} stroke="var(--color-green)" fill="var(--color-green)" fillOpacity={0.4} strokeWidth={2} />
-                  <Radar name={data.p2.username} dataKey={data.p2.username} stroke="var(--color-danger)" fill="var(--color-danger)" fillOpacity={0.4} strokeWidth={2} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+                  <Radar name={data.p1.username} dataKey="playerA" stroke="var(--color-green)" fill="var(--color-green)" fillOpacity={0.4} strokeWidth={2} />
+                  <Radar name={data.p2.username} dataKey="playerB" stroke="var(--color-danger)" fill="var(--color-danger)" fillOpacity={0.4} strokeWidth={2} />
                   <Legend wrapperStyle={{ fontFamily: 'var(--font-ui)', fontSize: 12 }} />
-                  <RechartsTooltip contentStyle={{ background: 'var(--color-bg)', border: 'var(--border-thick)', borderRadius: 0, fontFamily: 'var(--font-ui)', color: 'var(--color-ink)' }} />
+                  <RechartsTooltip
+                    contentStyle={{ background: 'var(--color-bg)', border: 'var(--border-thick)', borderRadius: 0, fontFamily: 'var(--font-ui)', color: 'var(--color-ink)' }}
+                    formatter={(val, name, entry) => {
+                      const raw = entry?.dataKey === 'playerA' ? entry?.payload?.rawA : entry?.payload?.rawB;
+                      return [raw ?? val, name];
+                    }}
+                  />
                 </RadarChart>
               </ResponsiveContainer>
             </div>

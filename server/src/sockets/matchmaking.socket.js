@@ -1,73 +1,102 @@
-const { getCache, setCache, redisClient } = require('../utils/cache');
+// `redisClient` in cache.js is (re)assigned after connectRedis() resolves, so
+// read it lazily through the module object rather than destructuring at load.
+const cache = require('../utils/cache');
 const { v4: uuidv4 } = require('uuid');
 
-const setupMatchmakingSockets = (io) => {
+const getRedis = () => cache.redisClient;
+
+// userId -> Set of live matchmaking socket ids, so a found match notifies only
+// the two players involved rather than everyone connected.
+const userSockets = new Map();
+
+const addUserSocket = (userId, socketId) => {
+  if (!userSockets.has(userId)) userSockets.set(userId, new Set());
+  userSockets.get(userId).add(socketId);
+};
+
+const removeUserSocket = (userId, socketId) => {
+  const set = userSockets.get(userId);
+  if (!set) return;
+  set.delete(socketId);
+  if (set.size === 0) userSockets.delete(userId);
+};
+
+const emitToUser = (mmNamespace, userId, event, payload) => {
+  const set = userSockets.get(userId);
+  if (!set) return;
+  for (const socketId of set) {
+    mmNamespace.to(socketId).emit(event, payload);
+  }
+};
+
+const setupMatchmakingSockets = (io, authMiddleware) => {
   const mmNamespace = io.of('/matchmaking');
+  if (authMiddleware) mmNamespace.use(authMiddleware);
 
   mmNamespace.on('connection', (socket) => {
+    const userId = socket.user?._id?.toString();
+    if (!userId) {
+      socket.emit('queue_error', { message: 'Not authenticated' });
+      socket.disconnect(true);
+      return;
+    }
+    addUserSocket(userId, socket.id);
+    socket.data.queues = new Set();
+
     socket.on('join_queue', async ({ mode, rating }) => {
-      if (!redisClient) {
+      if (!getRedis()) {
         socket.emit('queue_error', { message: 'Matchmaking is currently unavailable' });
         return;
       }
-      
-      const queueKey = `queue:${mode}`;
-      
-      // Add user to Redis Sorted Set with their rating as the score
-      await redisClient.zAdd(queueKey, { score: rating, value: socket.user._id.toString() });
-      socket.join(queueKey);
 
+      const queueKey = `queue:${mode}`;
+      await getRedis().zAdd(queueKey, { score: Number(rating) || 1200, value: userId });
+      socket.data.queues.add(queueKey);
+      socket.join(queueKey);
       socket.emit('queue_joined', { mode });
 
-      // Trigger matchmaking check
       matchPlayers(mmNamespace, queueKey);
     });
 
     socket.on('leave_queue', async ({ mode }) => {
-      if (!redisClient) return;
+      if (!getRedis()) return;
       const queueKey = `queue:${mode}`;
-      await redisClient.zRem(queueKey, socket.user._id.toString());
+      await getRedis().zRem(queueKey, userId);
+      socket.data.queues.delete(queueKey);
       socket.leave(queueKey);
       socket.emit('queue_left');
     });
 
     socket.on('disconnect', async () => {
-      if (!redisClient) return;
-      // In a real app, track which queue they were in. Here we'll do a basic cleanup
-      await redisClient.zRem('queue:blitz', socket.user._id.toString());
-      await redisClient.zRem('queue:bullet', socket.user._id.toString());
-      await redisClient.zRem('queue:rapid', socket.user._id.toString());
+      removeUserSocket(userId, socket.id);
+      if (!getRedis()) return;
+      for (const queueKey of socket.data.queues) {
+        await getRedis().zRem(queueKey, userId);
+      }
     });
   });
 };
 
 const matchPlayers = async (mmNamespace, queueKey) => {
-  if (!redisClient) return;
-  
-  // Get all players in queue sorted by rating
-  const players = await redisClient.zRangeWithScores(queueKey, 0, -1);
-  
-  // Simple matchmaking: pair adjacent players if rating delta < 100
+  if (!getRedis()) return;
+
+  const players = await getRedis().zRangeWithScores(queueKey, 0, -1);
+
   for (let i = 0; i < players.length - 1; i++) {
     const p1 = players[i];
     const p2 = players[i + 1];
 
     if (Math.abs(p1.score - p2.score) <= 100) {
-      // Match found!
-      const roomId = uuidv4();
-      
-      // Remove them from queue
-      await redisClient.zRem(queueKey, p1.value);
-      await redisClient.zRem(queueKey, p2.value);
+      const roomId = uuidv4().split('-')[0].toUpperCase();
 
-      // Notify them
-      mmNamespace.emit('match_found', {
-        roomId,
-        players: [p1.value, p2.value]
-      });
+      // Remove both atomically-ish before notifying, so a third check can't re-pair them.
+      const removed = await getRedis().zRem(queueKey, [p1.value, p2.value]);
+      if (removed < 2) continue;
 
-      // Skip the matched player
-      i++;
+      emitToUser(mmNamespace, p1.value, 'match_found', { roomId, color: 'white', opponent: p2.value });
+      emitToUser(mmNamespace, p2.value, 'match_found', { roomId, color: 'black', opponent: p1.value });
+
+      i++; // skip the player we just paired
     }
   }
 };
