@@ -7,6 +7,26 @@ const { setupMatchmakingSockets } = require('./sockets/matchmaking.socket');
 
 let io;
 
+// Shared handshake auth. `io.use()` only guards the main namespace in Socket.IO
+// v4, so this is also attached to each child namespace (/game, /matchmaking)
+// that relies on `socket.user`.
+const authMiddleware = async (socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error('Authentication error: No token provided'));
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // tokens are signed as { userId } (see auth.service.js)
+    const user = await User.findById(decoded.userId || decoded.id).select('-password');
+    if (!user) return next(new Error('Authentication error: User not found'));
+
+    socket.user = user;
+    next();
+  } catch (err) {
+    next(new Error('Authentication error: Invalid token'));
+  }
+};
+
 const initSocket = (server, pubClient, subClient) => {
   io = new Server(server, {
     cors: {
@@ -25,23 +45,8 @@ const initSocket = (server, pubClient, subClient) => {
     }
   }
 
-  // Authentication Middleware
-  io.use(async (socket, next) => {
-    try {
-      const token = socket.handshake.auth.token;
-      if (!token) return next(new Error('Authentication error: No token provided'));
-
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.id).select('-password');
-      
-      if (!user) return next(new Error('Authentication error: User not found'));
-      
-      socket.user = user;
-      next();
-    } catch (err) {
-      next(new Error('Authentication error: Invalid token'));
-    }
-  });
+  // Authentication Middleware (main namespace)
+  io.use(authMiddleware);
 
   // Global Connection Handler
   io.on('connection', (socket) => {
@@ -55,8 +60,8 @@ const initSocket = (server, pubClient, subClient) => {
     });
   });
 
-  setupGameSockets(io);
-  setupMatchmakingSockets(io);
+  setupGameSockets(io, authMiddleware);
+  setupMatchmakingSockets(io, authMiddleware);
 
   return io;
 };

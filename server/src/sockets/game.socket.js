@@ -1,124 +1,194 @@
 const { Chess } = require('chess.js');
 const Match = require('../models/Match');
-const User = require('../models/User');
 
-// In-memory active games
+// In-memory active games, keyed by roomId
 const activeGames = new Map();
 
-// Basic Elo Calculator
-const calculateElo = (r1, r2, result) => {
-  const k = 32;
-  const expected1 = 1 / (1 + Math.pow(10, (r2 - r1) / 400));
-  const expected2 = 1 / (1 + Math.pow(10, (r1 - r2) / 400));
-  
-  let score1 = 0.5, score2 = 0.5; // draw
-  if (result === 'white') { score1 = 1; score2 = 0; }
-  else if (result === 'black') { score1 = 0; score2 = 1; }
-  
-  return {
-    newR1: Math.round(r1 + k * (score1 - expected1)),
-    newR2: Math.round(r2 + k * (score2 - expected2))
-  };
+const COLOR_BY_TURN = { w: 'white', b: 'black' };
+
+const publicState = (room) => ({
+  fen: room.chess.fen(),
+  pgn: room.chess.pgn(),
+  turn: COLOR_BY_TURN[room.chess.turn()],
+  whiteName: room.players.white?.name || null,
+  blackName: room.players.black?.name || null,
+  started: Boolean(room.players.white && room.players.black),
+});
+
+const persistMatch = (roomId, room, winner, victory_status) => {
+  // roomId isn't guaranteed unique across sessions; suffix it so replays of the
+  // same room don't collide on the unique `id` index.
+  const match = new Match({
+    id: `${roomId}-${Date.now()}`,
+    status: 'completed',
+    pgn: room.chess.pgn(),
+    fen: room.chess.fen(),
+    winner,
+    victory_status,
+    white_id: room.players.white?.name || '',
+    black_id: room.players.black?.name || '',
+    turns: String(room.chess.history().length),
+  });
+  match.save().catch((err) => console.error('Failed to persist room match:', err.message));
 };
 
-const setupGameSockets = (io) => {
+const endGame = (namespace, roomId, room, { reason, winner }) => {
+  if (room.over) return;
+  room.over = true;
+  namespace.to(roomId).emit('game_over', { reason, winner });
+  persistMatch(roomId, room, winner, reason);
+  activeGames.delete(roomId);
+};
+
+const setupGameSockets = (io, authMiddleware) => {
   const gameNamespace = io.of('/game');
+  if (authMiddleware) gameNamespace.use(authMiddleware);
 
   gameNamespace.on('connection', (socket) => {
-    
-    socket.on('join_room', async ({ roomId }) => {
-      socket.join(roomId);
-      
-      let gameData = activeGames.get(roomId);
-      if (!gameData) {
-        // Initialize new game logic
-        gameData = {
+    const playerName = socket.user?.name || socket.user?.email || `guest-${socket.id.slice(0, 5)}`;
+
+    socket.on('join_room', ({ roomId }) => {
+      if (!roomId) return;
+      roomId = String(roomId).trim().toUpperCase();
+
+      let room = activeGames.get(roomId);
+      if (!room) {
+        room = {
           chess: new Chess(),
-          whiteId: null,
-          blackId: null,
-          whiteTimeMs: 600000,
-          blackTimeMs: 600000,
-          lastMoveTimestamp: Date.now()
+          players: { white: null, black: null },
+          over: false,
         };
-        activeGames.set(roomId, gameData);
+        activeGames.set(roomId, room);
       }
 
-      socket.emit('game_state', {
-        fen: gameData.chess.fen(),
-        pgn: gameData.chess.pgn(),
-        whiteTimeMs: gameData.whiteTimeMs,
-        blackTimeMs: gameData.blackTimeMs,
-      });
+      // Reconnect: same user already has a seat
+      let color = ['white', 'black'].find((c) => room.players[c]?.userId === String(socket.user?._id || ''));
+
+      if (!color) {
+        if (!room.players.white) color = 'white';
+        else if (!room.players.black) color = 'black';
+        else {
+          socket.emit('room_full', { roomId });
+          return;
+        }
+      }
+
+      room.players[color] = { socketId: socket.id, name: playerName, userId: String(socket.user?._id || '') };
+      socket.join(roomId);
+      socket.data.roomId = roomId;
+      socket.data.color = color;
+
+      socket.emit('assigned', { roomId, color });
+
+      const state = publicState(room);
+      socket.emit('game_state', state);
+
+      if (state.started) {
+        gameNamespace.to(roomId).emit('game_start', publicState(room));
+      } else {
+        socket.emit('waiting_for_opponent', { roomId });
+      }
     });
 
     socket.on('make_move', ({ roomId, move }) => {
-      const gameData = activeGames.get(roomId);
-      if (!gameData) return;
+      roomId = String(roomId || socket.data.roomId || '').trim().toUpperCase();
+      const room = activeGames.get(roomId);
+      if (!room || room.over) return;
 
-      try {
-        const result = gameData.chess.move(move);
-        if (result) {
-          gameData.lastMoveTimestamp = Date.now();
-          // Broadcast valid move
-          gameNamespace.to(roomId).emit('move_made', {
-            fen: gameData.chess.fen(),
-            pgn: gameData.chess.pgn(),
-            move
-          });
-
-          if (gameData.chess.isGameOver()) {
-            const reason = gameData.chess.isCheckmate() ? 'mate' : 'draw';
-            const winner = gameData.chess.isCheckmate() ? (gameData.chess.turn() === 'w' ? 'black' : 'white') : 'draw';
-            
-            gameNamespace.to(roomId).emit('game_over', { reason, winner });
-            
-            // Save to DB
-            const matchRecord = new Match({
-              id: roomId,
-              status: 'completed',
-              pgn: gameData.chess.pgn(),
-              fen: gameData.chess.fen(),
-              winner,
-              victory_status: reason
-            });
-            matchRecord.save().catch(console.error);
-
-            activeGames.delete(roomId);
-          }
-        }
-      } catch (err) {
-        // Invalid move
-        socket.emit('invalid_move', { message: 'Illegal move' });
+      const color = socket.data.color;
+      if (!color) return;
+      if (!room.players.white || !room.players.black) {
+        socket.emit('invalid_move', { message: 'Waiting for opponent' });
+        return;
       }
+      // Enforce turn ownership — chess.js alone can't tell who is who.
+      if (COLOR_BY_TURN[room.chess.turn()] !== color) {
+        socket.emit('invalid_move', { message: 'Not your turn' });
+        return;
+      }
+
+      let result;
+      try {
+        result = room.chess.move(move);
+      } catch (err) {
+        result = null;
+      }
+      if (!result) {
+        socket.emit('invalid_move', { message: 'Illegal move' });
+        return;
+      }
+
+      gameNamespace.to(roomId).emit('move_made', {
+        fen: room.chess.fen(),
+        pgn: room.chess.pgn(),
+        turn: COLOR_BY_TURN[room.chess.turn()],
+        move: result,
+      });
+
+      if (room.chess.isGameOver()) {
+        let reason = 'draw';
+        let winner = 'draw';
+        if (room.chess.isCheckmate()) {
+          reason = 'mate';
+          // side to move has been mated
+          winner = room.chess.turn() === 'w' ? 'black' : 'white';
+        } else if (room.chess.isStalemate()) {
+          reason = 'stalemate';
+        }
+        endGame(gameNamespace, roomId, room, { reason, winner });
+      }
+    });
+
+    socket.on('resign', ({ roomId }) => {
+      roomId = String(roomId || socket.data.roomId || '').trim().toUpperCase();
+      const room = activeGames.get(roomId);
+      if (!room || room.over) return;
+      const color = socket.data.color;
+      if (!color) return;
+      const winner = color === 'white' ? 'black' : 'white';
+      endGame(gameNamespace, roomId, room, { reason: 'resign', winner });
     });
 
     socket.on('offer_draw', ({ roomId }) => {
-      socket.to(roomId).emit('draw_offered');
+      roomId = String(roomId || socket.data.roomId || '').trim().toUpperCase();
+      const room = activeGames.get(roomId);
+      if (!room || room.over) return;
+      socket.to(roomId).emit('draw_offered', { from: socket.data.color });
     });
 
-    socket.on('resign', ({ roomId, color }) => {
-      const winner = color === 'white' ? 'black' : 'white';
-      gameNamespace.to(roomId).emit('game_over', { reason: 'resign', winner });
-      
-      const gameData = activeGames.get(roomId);
-      if (gameData) {
-        const matchRecord = new Match({
-          id: roomId,
-          status: 'completed',
-          pgn: gameData.chess.pgn(),
-          fen: gameData.chess.fen(),
-          winner,
-          victory_status: 'resign'
-        });
-        matchRecord.save().catch(console.error);
-        activeGames.delete(roomId);
+    socket.on('draw_response', ({ roomId, accept }) => {
+      roomId = String(roomId || socket.data.roomId || '').trim().toUpperCase();
+      const room = activeGames.get(roomId);
+      if (!room || room.over) return;
+      if (accept) {
+        endGame(gameNamespace, roomId, room, { reason: 'draw', winner: 'draw' });
+      } else {
+        socket.to(roomId).emit('draw_declined');
       }
     });
 
-    socket.on('send_message', ({ roomId, message, sender }) => {
-      gameNamespace.to(roomId).emit('receive_message', { message, sender });
+    socket.on('send_message', ({ roomId, message }) => {
+      roomId = String(roomId || socket.data.roomId || '').trim().toUpperCase();
+      gameNamespace.to(roomId).emit('receive_message', { message, sender: playerName });
     });
 
+    socket.on('disconnect', () => {
+      const roomId = socket.data.roomId;
+      const color = socket.data.color;
+      if (!roomId || !color) return;
+      const room = activeGames.get(roomId);
+      if (!room) return;
+
+      if (room.players[color]?.socketId === socket.id) {
+        room.players[color] = null;
+      }
+      socket.to(roomId).emit('opponent_left', { color });
+
+      // If the game hadn't started, drop the empty room.
+      if (!room.over && !room.players.white && !room.players.black) {
+        activeGames.delete(roomId);
+      }
+    });
   });
 };
 

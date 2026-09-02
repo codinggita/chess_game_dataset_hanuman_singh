@@ -1,5 +1,33 @@
 const Match = require('../models/Match');
 
+/**
+ * `created_at` is stored inconsistently across imports: newer rows use ISO date
+ * strings ("2025-12-30"), older rows use epoch-millisecond strings ("1.5e12").
+ * This expression parses either shape into a Date, yielding null on anything
+ * unparseable so callers can filter it out instead of erroring the aggregation.
+ */
+const parseCreatedAt = {
+  $let: {
+    vars: { raw: { $trim: { input: { $toString: '$created_at' } } } },
+    in: {
+      $cond: [
+        // ISO-ish date string ("2020-12-19", "2026-06-14T17:30:22.089Z")
+        { $regexMatch: { input: '$$raw', regex: '^[0-9]{4}-[0-9]{2}' } },
+        { $dateFromString: { dateString: '$$raw', onError: null, onNull: null } },
+        // epoch-millisecond string, possibly in scientific notation ("1.50421E+12")
+        {
+          $convert: {
+            input: { $convert: { input: '$$raw', to: 'double', onError: null, onNull: null } },
+            to: 'date',
+            onError: null,
+            onNull: null,
+          },
+        },
+      ],
+    },
+  },
+};
+
 const analyticsService = {
   getVictoryDistribution: async () => {
     const pipeline = [
@@ -162,7 +190,8 @@ const analyticsService = {
   getPlayerGrowth: async () => {
     const pipeline = [
       { $match: { isDeleted: false, created_at: { $ne: '', $exists: true } } },
-      { $addFields: { createdDate: { $toDate: { $toLong: { $toDouble: '$created_at' } } } } },
+      { $addFields: { createdDate: parseCreatedAt } },
+      { $match: { createdDate: { $ne: null } } },
       { $group: { _id: { year: { $year: '$createdDate' }, month: { $month: '$createdDate' } }, newPlayers: { $addToSet: '$white_id' } } },
       { $addFields: { playerCount: { $size: '$newPlayers' } } },
       { $sort: { '_id.year': 1, '_id.month': 1 } },
@@ -174,7 +203,8 @@ const analyticsService = {
   getHourlyActivity: async () => {
     const pipeline = [
       { $match: { isDeleted: false, created_at: { $ne: '', $exists: true } } },
-      { $addFields: { createdDate: { $toDate: { $toLong: { $toDouble: '$created_at' } } } } },
+      { $addFields: { createdDate: parseCreatedAt } },
+      { $match: { createdDate: { $ne: null } } },
       { $group: { _id: { $hour: '$createdDate' }, count: { $sum: 1 } } },
       { $sort: { '_id': 1 } },
       { $project: { _id: 0, hour: '$_id', count: 1 } }
@@ -220,7 +250,13 @@ const analyticsService = {
   getRatingTrend: async () => {
     const pipeline = [
       { $match: { isDeleted: false, created_at: { $ne: '', $exists: true }, white_rating: { $ne: '' }, black_rating: { $ne: '' } } },
-      { $addFields: { createdDate: { $toDate: { $toLong: { $toDouble: '$created_at' } } }, avgMatchRating: { $divide: [{ $add: [{ $toInt: '$white_rating' }, { $toInt: '$black_rating' }] }, 2] } } },
+      { $addFields: {
+        createdDate: parseCreatedAt,
+        whiteRatingNum: { $convert: { input: '$white_rating', to: 'double', onError: null, onNull: null } },
+        blackRatingNum: { $convert: { input: '$black_rating', to: 'double', onError: null, onNull: null } },
+      } },
+      { $match: { createdDate: { $ne: null }, whiteRatingNum: { $ne: null }, blackRatingNum: { $ne: null } } },
+      { $addFields: { avgMatchRating: { $divide: [{ $add: ['$whiteRatingNum', '$blackRatingNum'] }, 2] } } },
       { $group: { _id: { year: { $year: '$createdDate' }, month: { $month: '$createdDate' } }, avgRating: { $avg: '$avgMatchRating' } } },
       { $sort: { '_id.year': 1, '_id.month': 1 } },
       { $project: { _id: 0, date: { $concat: [{ $toString: '$_id.year' }, '-', { $cond: [{ $lt: ['$_id.month', 10] }, { $concat: ['0', { $toString: '$_id.month' }] }, { $toString: '$_id.month' }] }] }, avgRating: { $round: ['$avgRating', 0] } } }

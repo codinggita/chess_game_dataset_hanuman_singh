@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { io } from 'socket.io-client';
 import { useNavigate } from 'react-router-dom';
+import { connectSocket } from '../../services/socket.js';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 
@@ -12,10 +12,14 @@ export default function PlayRandomPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem('chess_auth_token');
-    const newSocket = io('http://localhost:5000/matchmaking', { auth: { token } });
+    const newSocket = connectSocket('/matchmaking');
 
     newSocket.on('connect', () => console.log('Connected to matchmaking namespace'));
+    newSocket.on('connect_error', (err) => setStatus(err.message || 'Connection failed'));
+    newSocket.on('queue_error', ({ message }) => {
+      setInQueue(false);
+      setStatus(message || 'Matchmaking is currently unavailable');
+    });
 
     newSocket.on('queue_joined', ({ mode }) => {
       setInQueue(true);
